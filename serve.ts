@@ -1,67 +1,67 @@
-// A tiny static server for app/ (Node 22, standard library only), so the
-// entry can be tried locally without a build step: `node serve.ts` serves
-// app/ on http://localhost:8080. It sends the MIME types an offline web app
-// needs, refuses any path outside app/, and otherwise does nothing clever:
-// this is a development convenience, not a web server for the internet.
+// Vice Cover Studio — tiny static server for local development.
+//
+// Serves app/ at http://localhost:8080 so the editor can be tried in a
+// desktop browser. Standard library only; run it with `node serve.ts`.
+// The port can be changed with the PORT environment variable.
+
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { extname, join, normalize, resolve, sep } from 'node:path';
+import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = resolve(fileURLToPath(new URL('./app', import.meta.url)));
-const args = process.argv.slice(2);
-const portIndex = args.indexOf('--port');
-const requested = portIndex === -1 ? 8080 : Number(args[portIndex + 1]);
-const port = Number.isInteger(requested) && requested > 0 && requested < 65536 ? requested : 8080;
+var APP_DIR = resolve(join(fileURLToPath(new URL('.', import.meta.url)), 'app'));
+var PORT = Number(process.env.PORT || 8080);
 
-const MIME = {
+var MIME = {
   '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
   '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.woff2': 'font/woff2',
-  '.woff': 'font/woff',
   '.ttf': 'font/ttf',
-  '.otf': 'font/otf',
-  '.txt': 'text/plain; charset=utf-8',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.txt': 'text/plain; charset=utf-8'
 };
 
-createServer((request, response) => {
-  const url = new URL(request.url ?? '/', 'http://localhost');
-  let pathname;
+var server = createServer(function (req, res) {
+  var rawPath = decodeURIComponent((req.url || '/').split('?')[0]);
+  if (rawPath === '/') rawPath = '/index.html';
+  var filePath = resolve(join(APP_DIR, rawPath));
+  // Refuse anything that climbs out of app/.
+  if (filePath !== APP_DIR && !filePath.startsWith(APP_DIR + '/')) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('Forbidden');
+    return;
+  }
+  var stat;
   try {
-    pathname = decodeURIComponent(url.pathname);
-  } catch {
-    response.writeHead(400).end('bad request');
+    stat = statSync(filePath);
+  } catch (err) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('Not found: ' + rawPath);
     return;
   }
-  if (pathname.endsWith('/')) pathname += 'index.html';
-  const file = resolve(join(root, normalize(pathname)));
-  if (file !== root && !file.startsWith(root + sep)) {
-    response.writeHead(403).end('forbidden');
+  if (!stat.isFile()) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('Not found: ' + rawPath);
     return;
   }
-  let size;
-  try {
-    const stats = statSync(file);
-    if (!stats.isFile()) throw new Error('not a file');
-    size = stats.size;
-  } catch {
-    response.writeHead(404).end('not found');
-    return;
-  }
-  response.writeHead(200, {
-    'content-type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream',
-    'content-length': size,
-    'cache-control': 'no-store',
-  });
-  createReadStream(file).pipe(response);
-}).listen(port, '127.0.0.1');
+  var type = MIME[extname(filePath).toLowerCase()] || 'application/octet-stream';
+  // Never cache during development: the editor changes often, and a
+  // stale cached font or script is the classic "it works on reload"
+  // trap. The shipped app is static files, so this costs nothing.
+  var headers = { 'content-type': type, 'content-length': stat.size, 'cache-control': 'no-store' };
+  res.writeHead(200, headers);
+  createReadStream(filePath).pipe(res);
+});
+
+server.listen(PORT, function () {
+  // The server stays quiet on purpose: no logging, no tracking.
+});
+
+export { server };

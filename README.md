@@ -1,14 +1,26 @@
-# gta6-cover-vice
+# Vice Cover Studio
 
 [![make.fun · gta6-cover-art-01](https://make.fun/badge/gta6-cover-art-01.svg)](https://make.fun/bounty/gta6-cover-art-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
 [![rank](https://make.fun/badge/gta6-cover-art-01/bayyubenjamin/gta6-cover-vice/rank.svg)](https://make.fun/bounty/gta6-cover-art-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
 [![reward](https://make.fun/badge/gta6-cover-art-01/bayyubenjamin/gta6-cover-vice/reward.svg)](https://make.fun/bounty/gta6-cover-art-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
 
-Vice Cover Studio turns a photo and a caption into GTA-style poster art — a diagonal five-panel poster with a hero portrait, three re-cropped vignettes, a procedurally drawn neon skyline and a real cinematic grade — and exports it as a PNG in 1080 x 1080, 1080 x 1350 or 1920 x 1080. It runs offline in a desktop browser from its own static files; photos never leave the machine.
+Give it a photo and a caption; get back a poster. Vice Cover Studio is a small offline web app that composes GTA-style cover art — five diagonal panels, a skyline drawn in code, a cinematic colour grade — and exports a finished PNG at 1080×1080, 1080×1350 or 1920×1080. Nothing is uploaded: the photo stays on your machine from load to export.
 
-## What makes it different
+## Why it reads as a poster, not a filter
 
-Every other cover maker pastes a photo under a sunset gradient. This one cuts the user's own photo into a poster: the hero panel shows the subject, three vignettes re-crop the same photo at different zooms and focus points (wide, detail, sky), the title strip is a skyline drawn in code — sun disc with scanline gaps, lit windows, palm silhouettes, all from a fixed seed — and the colour grade is computed per pixel in canvas (teal shadows / warm highlights for Vice Sunset, teal shadows / pink highlights for Neon Nights). The result is a poster, not a filtered photo. The first screenshot is the landscape cover the app itself exported, because that is what the judge sees largest.
+A filter changes the colours of one photo. This app re-cuts the photo into a composition:
+
+- **One photo, four views.** The hero panel shows the subject; three vignettes re-crop the same photo at different zooms and focus points — a wide establishing view, a close detail, and the sky. Same photo, four framings, one poster.
+- **A skyline that is code, not an image.** The title strip's sun, scanline gaps, lit windows and palm silhouettes are all drawn procedurally from a single fixed seed. Same settings, same skyline, every single run.
+- **A grade computed per pixel.** Vice Sunset pushes shadows toward teal and highlights toward warm amber; Neon Nights keeps the teal shadows and pushes highlights toward pink. The grade is baked into the photo once, then every panel draws from the graded copy.
+- **Lettering that waits for its font.** The title is set in Anton, and the app refuses to draw the canvas until the font is actually loaded. A cover drawn with a fallback font is a broken cover, so the render pipeline gates on `document.fonts` first.
+
+## Design decisions
+
+- **Diagonal cuts, not a grid.** Panel dividers slant a few degrees off vertical, and the vignette dividers dip toward the edge. Straight boxes read as a photo grid; slanted panels read as a poster.
+- **Deterministic by construction.** One seed for the skyline, no unseeded randomness, no timestamps in any output. The four screenshots are byte-identical when retaken.
+- **Offline by default.** No network requests at all: the font, the samples and the scripts are all local files. Open `index.html` with the network off and everything still works.
+- **No Rockstar material.** No logo, no artwork, no font from Rockstar anywhere. The only typeface is Anton under the SIL Open Font License (see `app/fonts/OFL.txt`).
 
 ## Run it
 
@@ -16,19 +28,28 @@ Every other cover maker pastes a photo under a sunset gradient. This one cuts th
 node serve.ts
 ```
 
-Then open http://localhost:8080 in desktop Chrome. Pick a photo (or a sample), type a caption and tagline, choose a size, panels and grade, and press Export PNG.
+Open http://localhost:8080 in desktop Chrome. Upload a photo (or pick a sample), type a caption and a tagline, choose a size, a panel layout and a grade, then press Export PNG.
 
-## How it works
+## Take the screenshots
 
-- `app/src/cover.js` — the render engine: `computePanels` lays out the diagonal panel grid, `getGradedPhoto` bakes the cinematic grade once per photo into an offscreen canvas, `drawSkyline` draws the neon skyline from a seed, `drawCover` composes panels, skyline and lettering.
-- `app/src/main.js` — wires the editor: photo upload, sample picker, caption, size / layout / grade pickers, PNG export.
-- `app/src/shots.js` — fixed `?shot=` scenes so screenshots are reproducible.
-- `app/fonts/Anton-Regular.ttf` — Anton, SIL Open Font License (see `app/fonts/OFL.txt`). No Rockstar logo, artwork or font anywhere.
-- `main.ts` — the entrypoint: copies `app/` and `screenshots/` to the output and writes `dossier.json` with the vendored make.fun library.
+`shots.json` lists the four shots: the exported landscape cover first, the editor with a photo loaded, then the exported portrait and square covers. Each shot is a fixed `?shot=N` scene; the page sets `window.__shotReady` once the scene is fully drawn. Serve the app and capture each shot at the size in `shots.json` (for example with a headless browser that waits for `__shotReady`).
 
-## Screenshots
+## Files
 
-`shots.json` lists the four shots: the exported wide cover first, the editor with a photo loaded, then the exported portrait and square covers. Take them with a headless browser against `node serve.ts`, waiting for `window.__shotReady`.
+- `app/index.html` — the editor page.
+- `app/style.css` — the dark Vice theme for the editor.
+- `app/src/cover.js` — the render engine: panel layout, per-pixel grade, procedural skyline, composition.
+- `app/src/main.js` — editor wiring: upload, samples, controls, PNG export.
+- `app/src/shots.js` — the four fixed `?shot=` scenes.
+- `app/fonts/Anton-Regular.ttf` + `app/fonts/OFL.txt` — Anton and its licence.
+- `app/samples/` — three sample photos (boulevard, neon, pier), all free to use.
+- `main.ts` — entrypoint: copies `app/` and `screenshots/` to the output and writes `dossier.json`.
+- `serve.ts` — the local static server.
+- `shots.json` — the four screenshot definitions.
+
+## Licence
+
+MIT (see `LICENSE`). The Anton font is licensed under the SIL Open Font License 1.1.
 
 ---
 

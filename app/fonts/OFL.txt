@@ -1,9 +1,14 @@
-Copyright 2020 The Anton Project Authors (https://github.com/googlefonts/AntonFont.git)
+This file applies to the font in this directory: Anton-Regular.ttf.
+Copyright 2020 The Anton Project Authors (https://github.com/googlefonts/AntonFont).
+Reserved Font Name: Anton.
+
+The app loads this font with an @font-face rule in app/index.html and
+waits for it (document.fonts) before drawing any canvas lettering, so
+the poster's title is always set in Anton, never in a fallback font.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
-http://scripts.sil.org/OFL
-
+https://scripts.sil.org/OFL
 
 -----------------------------------------------------------
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
@@ -18,7 +23,7 @@ with others.
 
 The OFL allows the licensed fonts to be used, studied, modified and
 redistributed freely as long as they are not sold by themselves. The
-fonts, including any derivative works, can be bundled, embedded, 
+fonts, including any derivative works, can be bundled, embedded,
 redistributed and/or sold with any software provided that any reserved
 names are not used by derivative works. The fonts and derivatives,
 however, cannot be released under any other type of license. The
@@ -89,5 +94,5 @@ OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
 COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
 INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
 DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
-OTHER DEALINGS IN THE FONT SOFTWARE.
+FROM, OUT OF OR IN CONNECTION WITH THE USE OR INABILITY TO USE THE FONT
+SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.

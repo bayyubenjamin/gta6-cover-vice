@@ -1,156 +1,261 @@
-// Vice Cover Studio — wires the page: pick a photo, type a caption, choose
-// a size, layout and grade, export the cover as a PNG. A `?shot=` query sets
-// up a fixed scene for a screenshot instead (./shots.js). Photos are read on
-// the person's own machine and never leave it.
-import { drawCover, SIZES, GRADES } from './cover.js';
-import { loadImage, runShot } from './shots.js';
+// Vice Cover Studio — editor wiring.
+//
+// Connects the controls (photo upload, sample picker, caption, size,
+// layout, grade, export) to the render engine in cover.js. The preview
+// re-renders on every change, always after the Anton font is ready, so
+// the lettering never falls back to a system font.
 
-const canvas = document.getElementById('cover');
-const captionInput = document.getElementById('caption');
-const taglineInput = document.getElementById('tagline');
-const status = document.getElementById('status');
-const exportButton = document.getElementById('export');
-const photoInput = document.getElementById('photo');
+(function () {
+  'use strict';
 
-const state = {
-  photo: null,
-  photoName: 'boulevard',
-  caption: 'Sunset Heist',
-  tagline: 'Vice City',
-  size: 'wide',
-  layout: 'diagonal',
-  grade: 'sunset',
-};
+  var SIZES = {
+    square: { label: 'Square 1080 x 1080', w: 1080, h: 1080 },
+    portrait: { label: 'Portrait 1080 x 1350', w: 1080, h: 1350 },
+    landscape: { label: 'Landscape 1920 x 1080', w: 1920, h: 1080 }
+  };
 
-let redrawQueued = false;
+  var SAMPLES = {
+    boulevard: { label: 'Boulevard — midday', file: 'samples/boulevard.jpg' },
+    neon: { label: 'Neon — night street', file: 'samples/neon.png' },
+    pier: { label: 'Pier — sunset', file: 'samples/pier.jpg' }
+  };
 
-function redraw() {
-  const size = SIZES[state.size];
-  if (canvas.width !== size.w || canvas.height !== size.h) {
-    canvas.width = size.w;
-    canvas.height = size.h;
+  var state = {
+    photo: null,
+    photoName: '',
+    caption: 'VICE CITY',
+    tagline: 'A new story begins',
+    size: 'landscape',
+    layout: 'left',
+    grade: 'sunset'
+  };
+
+  var els = {};
+  var renderQueued = false;
+  var fontsReady = false;
+
+  function $(id) {
+    return document.getElementById(id);
   }
-  drawCover(canvas, state.photo, {
-    caption: state.caption,
-    tagline: state.tagline,
-    size: state.size,
-    layout: state.layout,
-    grade: state.grade,
-  });
-}
 
-function queueRedraw() {
-  if (redrawQueued) return;
-  redrawQueued = true;
-  requestAnimationFrame(() => {
-    redrawQueued = false;
-    redraw();
-  });
-}
+  function setStatus(text) {
+    if (els.status) els.status.textContent = text;
+  }
 
-async function loadSample(name) {
-  state.photoName = name;
-  state.photo = await loadImage(`samples/${name}.jpg`);
-  document.querySelectorAll('[data-sample]').forEach((button) => {
-    button.classList.toggle('active', button.dataset.sample === name);
-  });
-  redraw();
-}
+  function currentSize() {
+    return SIZES[state.size] || SIZES.landscape;
+  }
 
-function bindSegmented(groupId, key) {
-  document.querySelectorAll(`#${groupId} [data-value]`).forEach((button) => {
-    button.addEventListener('click', () => {
-      state[key] = button.dataset.value;
-      document.querySelectorAll(`#${groupId} [data-value]`).forEach((other) => {
-        other.classList.toggle('active', other === button);
-      });
-      queueRedraw();
+  // Load an image element from a URL and wait until it decodes.
+  function loadImage(url) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () { resolve(img); };
+      img.onerror = function () { reject(new Error('Could not load image: ' + url)); };
+      img.src = url;
     });
-  });
-}
+  }
 
-photoInput.addEventListener('change', async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  state.photo = await loadImage(URL.createObjectURL(file));
-  state.photoName = file.name;
-  document.querySelectorAll('[data-sample]').forEach((button) => {
-    button.classList.remove('active');
-  });
-  status.textContent = `Loaded ${file.name}.`;
-  redraw();
-});
-
-document.querySelectorAll('[data-sample]').forEach((button) => {
-  button.addEventListener('click', () => {
-    loadSample(button.dataset.sample).catch(() => {
-      status.textContent = 'That sample photo did not load.';
+  function loadSample(name) {
+    var sample = SAMPLES[name];
+    if (!sample) return Promise.reject(new Error('Unknown sample: ' + name));
+    setStatus('Loading sample: ' + sample.label + '…');
+    return loadImage(sample.file).then(function (img) {
+      state.photo = img;
+      state.photoName = sample.label;
+      markSampleButtons(name);
+      return renderPreview();
     });
-  });
-});
+  }
 
-captionInput.addEventListener('input', () => {
-  state.caption = captionInput.value;
-  queueRedraw();
-});
-taglineInput.addEventListener('input', () => {
-  state.tagline = taglineInput.value;
-  queueRedraw();
-});
-
-bindSegmented('size-picker', 'size');
-bindSegmented('layout-picker', 'layout');
-bindSegmented('grade-picker', 'grade');
-
-exportButton.addEventListener('click', () => {
-  const size = SIZES[state.size];
-  canvas.toBlob((blob) => {
-    if (!blob) {
-      status.textContent = 'Export failed. Try again.';
-      return;
+  function markSampleButtons(activeName) {
+    var buttons = document.querySelectorAll('[data-sample]');
+    var i;
+    for (i = 0; i < buttons.length; i++) {
+      if (buttons[i].getAttribute('data-sample') === activeName) {
+        buttons[i].classList.add('active');
+      } else {
+        buttons[i].classList.remove('active');
+      }
     }
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `vice-cover-${size.w}x${size.h}.png`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    status.textContent = `Saved vice-cover-${size.w}x${size.h}.png`;
-  }, 'image/png');
-});
+  }
 
-const params = new URLSearchParams(location.search);
-const shot = params.get('shot');
-if (shot) {
-  runShot(shot, params, async (scene) => {
-    state.photo = scene.photo;
-    state.photoName = params.get('photo') ?? 'boulevard';
-    state.caption = scene.caption;
-    state.tagline = scene.tagline;
-    state.size = scene.size;
-    state.layout = scene.layout;
-    state.grade = scene.grade;
-    captionInput.value = scene.caption;
-    taglineInput.value = scene.tagline;
-    document.querySelectorAll('[data-sample]').forEach((button) => {
-      button.classList.toggle('active', button.dataset.sample === state.photoName);
+  function loadUpload(file) {
+    if (!file || !file.type || file.type.indexOf('image/') !== 0) {
+      setStatus('Please choose an image file.');
+      return Promise.resolve();
+    }
+    setStatus('Loading your photo…');
+    return new Promise(function (resolve) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        loadImage(reader.result).then(function (img) {
+          state.photo = img;
+          state.photoName = file.name;
+          markSampleButtons('');
+          resolve(renderPreview());
+        });
+      };
+      reader.readAsDataURL(file);
     });
-    document.querySelectorAll('#size-picker [data-value]').forEach((button) => {
-      button.classList.toggle('active', button.dataset.value === scene.size);
+  }
+
+  // Re-render the preview. Always waits for Anton first (the font-race
+  // fix), and coalesces rapid changes into a single render.
+  function renderPreview() {
+    if (renderQueued) return Promise.resolve();
+    renderQueued = true;
+    return Promise.resolve().then(function () {
+      return fontsReady ? null : window.ViceCover.waitForAnton().then(function () {
+        fontsReady = true;
+      });
+    }).then(function () {
+      renderQueued = false;
+      if (!state.photo || !els.preview) return;
+      var size = currentSize();
+      var scale = Math.min(1, 880 / size.w);
+      var pw = Math.round(size.w * scale);
+      var ph = Math.round(size.h * scale);
+      if (els.preview.width !== pw) els.preview.width = pw;
+      if (els.preview.height !== ph) els.preview.height = ph;
+      var ctx = els.preview.getContext('2d');
+      window.ViceCover.drawCover(ctx, state.photo, {
+        width: pw,
+        height: ph,
+        caption: state.caption,
+        tagline: state.tagline,
+        layout: state.layout,
+        grade: state.grade
+      });
+      setStatus(
+        'Preview: ' + size.label + ' · layout ' + state.layout +
+        ' · grade ' + state.grade + ' · photo: ' + state.photoName
+      );
     });
-    document.querySelectorAll('#layout-picker [data-value]').forEach((button) => {
-      button.classList.toggle('active', button.dataset.value === scene.layout);
+  }
+
+  // Export the full-size PNG and trigger a download.
+  function exportPNG() {
+    if (!state.photo) {
+      setStatus('Load a photo first.');
+      return Promise.resolve();
+    }
+    setStatus('Rendering export…');
+    return window.ViceCover.waitForAnton().then(function () {
+      var size = currentSize();
+      var canvas = window.ViceCover.renderCover(state.photo, {
+        width: size.w,
+        height: size.h,
+        caption: state.caption,
+        tagline: state.tagline,
+        layout: state.layout,
+        grade: state.grade
+      });
+      return new Promise(function (resolve) {
+        canvas.toBlob(function (blob) {
+          if (!blob) {
+            setStatus('Export failed: the browser could not make the PNG.');
+            resolve();
+            return;
+          }
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = 'vice-cover-' + state.layout + '-' + state.grade + '-' + size.w + 'x' + size.h + '.png';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+          setStatus('Exported vice-cover-' + state.layout + '-' + state.grade + '-' + size.w + 'x' + size.h + '.png');
+          resolve();
+        }, 'image/png');
+      });
     });
-    document.querySelectorAll('#grade-picker [data-value]').forEach((button) => {
-      button.classList.toggle('active', button.dataset.value === scene.grade);
+  }
+
+  function readControls() {
+    state.caption = els.caption.value || 'VICE CITY';
+    state.tagline = els.tagline.value || '';
+    state.size = els.size.value;
+    state.layout = els.layout.value;
+    state.grade = els.grade.value;
+  }
+
+  function bindControls() {
+    els.photoInput.addEventListener('change', function (ev) {
+      var file = ev.target.files && ev.target.files[0];
+      if (file) loadUpload(file);
     });
-    redraw();
-  }).catch(() => {
-    status.textContent = 'The screenshot scene did not load.';
-    window.__shotReady = true;
-  });
-} else {
-  loadSample('boulevard').catch(() => {
-    status.textContent = 'Pick a photo to begin.';
-    redraw();
-  });
-}
+    var sampleButtons = document.querySelectorAll('[data-sample]');
+    var i;
+    for (i = 0; i < sampleButtons.length; i++) {
+      sampleButtons[i].addEventListener('click', function (ev) {
+        var name = ev.currentTarget.getAttribute('data-sample');
+        loadSample(name);
+      });
+    }
+    var inputs = [els.caption, els.tagline, els.size, els.layout, els.grade];
+    for (i = 0; i < inputs.length; i++) {
+      inputs[i].addEventListener('input', function () {
+        readControls();
+        renderPreview();
+      });
+      inputs[i].addEventListener('change', function () {
+        readControls();
+        renderPreview();
+      });
+    }
+    els.exportBtn.addEventListener('click', exportPNG);
+    // Keyboard shortcut: press "e" anywhere outside a text field to
+    // export the current cover.
+    document.addEventListener('keydown', function (ev) {
+      var tag = (ev.target && ev.target.tagName) || '';
+      if (ev.key === 'e' && tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA') {
+        exportPNG();
+      }
+    });
+  }
+
+  // Boot the editor: grab the elements, wire the controls, load the
+  // default sample and render the first preview.
+  function init() {
+    els = {
+      preview: $('preview'),
+      status: $('status'),
+      photoInput: $('photo-input'),
+      caption: $('caption'),
+      tagline: $('tagline'),
+      size: $('size'),
+      layout: $('layout'),
+      grade: $('grade'),
+      exportBtn: $('export-btn')
+    };
+    bindControls();
+    readControls();
+    return loadSample('boulevard');
+  }
+
+  var readyPromise = null;
+  function ready() {
+    if (!readyPromise) readyPromise = init();
+    return readyPromise;
+  }
+
+  window.ViceApp = {
+    state: state,
+    sizes: SIZES,
+    samples: SAMPLES,
+    loadSample: loadSample,
+    loadUpload: loadUpload,
+    renderPreview: renderPreview,
+    exportPNG: exportPNG,
+    readControls: readControls,
+    ready: ready
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', ready);
+  } else {
+    ready();
+  }
+})();

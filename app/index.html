@@ -1,66 +1,96 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Cover Studio — GTA-style poster maker</title>
-<link rel="stylesheet" href="./style.css">
+<title>Vice Cover Studio — GTA-style cover art maker</title>
+<meta name="description" content="Turn a photo and a caption into GTA-style poster art: a diagonal five-panel poster with a hero portrait, re-cropped vignettes, a procedural neon skyline and a cinematic grade. Runs offline; photos never leave your machine.">
+<style>
+  @font-face {
+    font-family: 'Anton';
+    src: url('fonts/Anton-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main class="app">
-  <section class="controls" aria-label="Cover controls">
-    <header>
-      <h1>VICE COVER<br>STUDIO</h1>
-      <p class="tag">Turn a photo into GTA-style poster art. Offline, on your machine — your photos never leave it.</p>
-    </header>
-
-    <label class="field">Photo
-      <input id="photo" type="file" accept="image/*">
-    </label>
-    <div class="samples" role="group" aria-label="Sample photos">
-      <button type="button" data-sample="boulevard" class="sample active">Boulevard</button>
-      <button type="button" data-sample="neon" class="sample">Neon Street</button>
-      <button type="button" data-sample="pier" class="sample">Pier</button>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">V</span>
+    <div>
+      <h1>VICE COVER STUDIO</h1>
+      <p class="tagline">Turn a photo into GTA-style poster art</p>
     </div>
+  </div>
+  <p class="offline-note">Runs offline &middot; your photo never leaves this machine</p>
+</header>
 
-    <label class="field">Caption
-      <input id="caption" type="text" maxlength="40" value="Sunset Heist">
-    </label>
-    <label class="field">Tagline
-      <input id="tagline" type="text" maxlength="24" value="Vice City">
-    </label>
-
-    <div class="field">Size
-      <div class="segmented" id="size-picker" role="group" aria-label="Export size">
-        <button type="button" data-value="square">1080²</button>
-        <button type="button" data-value="portrait">1080×1350</button>
-        <button type="button" data-value="wide" class="active">1920×1080</button>
-      </div>
-    </div>
-
-    <div class="field">Panels
-      <div class="segmented" id="layout-picker" role="group" aria-label="Panel layout">
-        <button type="button" data-value="diagonal" class="active">Diagonal</button>
-        <button type="button" data-value="grid">Grid</button>
-      </div>
-    </div>
-
-    <div class="field">Grade
-      <div class="segmented" id="grade-picker" role="group" aria-label="Colour grade">
-        <button type="button" data-value="sunset" class="active">Vice Sunset</button>
-        <button type="button" data-value="neon">Neon Nights</button>
-      </div>
-    </div>
-
-    <button id="export" type="button" class="export">Export PNG</button>
-    <p id="status" role="status">Pick a photo, or try a sample.</p>
-    <p class="fine">Diagonal five-panel poster · hero + three vignettes · drawn neon skyline · real cinematic grade. Fonts: Anton (SIL OFL).</p>
+<main class="editor">
+  <section class="preview-pane" aria-label="Cover preview">
+    <canvas id="preview" width="880" height="495"></canvas>
+    <p id="status" class="status" role="status">Loading…</p>
   </section>
 
-  <section class="preview" aria-label="Live cover preview">
-    <canvas id="cover" width="1920" height="1080"></canvas>
-  </section>
+  <aside class="controls" aria-label="Cover controls">
+    <section class="control-group">
+      <h2>1. Photo</h2>
+      <label class="upload-btn" for="photo-input">Upload a photo</label>
+      <input id="photo-input" type="file" accept="image/*" hidden>
+      <div class="samples" role="group" aria-label="Sample photos">
+        <button type="button" data-sample="boulevard">Boulevard</button>
+        <button type="button" data-sample="neon">Neon</button>
+        <button type="button" data-sample="pier">Pier</button>
+      </div>
+      <p class="hint">Or pick a sample. Samples are free to use and ship with the app.</p>
+    </section>
+
+    <section class="control-group">
+      <h2>2. Words</h2>
+      <label for="caption">Caption (big title)</label>
+      <input id="caption" type="text" value="VICE CITY" maxlength="24" autocomplete="off">
+      <label for="tagline">Tagline</label>
+      <input id="tagline" type="text" value="A new story begins" maxlength="48" autocomplete="off">
+    </section>
+
+    <section class="control-group">
+      <h2>3. Format</h2>
+      <label for="size">Export size</label>
+      <select id="size">
+        <option value="landscape" selected>Landscape 1920 x 1080</option>
+        <option value="portrait">Portrait 1080 x 1350</option>
+        <option value="square">Square 1080 x 1080</option>
+      </select>
+      <label for="layout">Panel layout</label>
+      <select id="layout">
+        <option value="left" selected>Diagonal — hero left</option>
+        <option value="right">Diagonal — hero right</option>
+        <option value="stack">Split — hero on top</option>
+      </select>
+      <label for="grade">Colour grade</label>
+      <select id="grade">
+        <option value="sunset" selected>Vice Sunset — teal shadows, warm highlights</option>
+        <option value="neon">Neon Nights — teal shadows, pink highlights</option>
+      </select>
+    </section>
+
+    <button id="export-btn" type="button" class="export-btn">Export PNG</button>
+    <p class="hint">Exports at full size. Press <kbd>E</kbd> to export without clicking. The skyline is drawn from a fixed seed, so the same settings always make the same poster.</p>
+    <details class="how-it-works">
+      <summary>How the poster is built</summary>
+      <p>One photo becomes four views: a hero portrait plus wide, detail and sky crops of the same photo. The title strip is a skyline drawn in code — sun, scanline gaps, lit windows, palms — from a single fixed seed. The colour grade is computed per pixel. Nothing is uploaded; the photo never leaves this machine.</p>
+    </details>
+  </aside>
 </main>
-<script type="module" src="./src/main.js"></script>
+
+<footer class="footnote">
+  <p>Vice Cover Studio — a cover maker, not affiliated with Rockstar Games. No Rockstar logo, artwork or font is used anywhere in this app. Font: Anton (SIL Open Font License).</p>
+</footer>
+
+<script src="src/cover.js"></script>
+<script src="src/main.js"></script>
+<script src="src/shots.js"></script>
 </body>
 </html>
